@@ -64,6 +64,14 @@ $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json
 if ($manifest.architecture -ne 'arm64' -or $manifest.machine -ne '0xAA64') {
     throw "Manifest architecture is not ARM64."
 }
+if ($manifest.globalConfig.mode -ne 'executable-relative' -or
+    $manifest.globalConfig.executable -ne 'usr/bin/ssh.exe' -or
+    $manifest.globalConfig.relativePath -ne '../../etc/ssh/ssh_config' -or
+    $manifest.globalConfig.packagePath -ne 'etc/ssh/ssh_config' -or
+    $manifest.globalConfig.configurationIncluded -ne $false -or
+    $manifest.globalConfig.unknownAlgorithmBehavior -ne 'error') {
+    throw "Manifest portable global configuration contract is invalid."
+}
 
 $replaceEntries = @($manifest.baselineDisposition | Where-Object disposition -eq 'replace')
 $removeEntries = @($manifest.baselineDisposition | Where-Object disposition -eq 'remove')
@@ -109,4 +117,4 @@ foreach ($fileEntry in $manifest.files) {
     }
 }
 
-Write-Host "Validated ARM64 client package: 10 baseline replacements, one removal, 14 ARM64 PE files, no server payload."
+Write-Host "Validated ARM64 client package: executable-relative global config contract, 10 baseline replacements, one removal, 14 ARM64 PE files, no server payload."

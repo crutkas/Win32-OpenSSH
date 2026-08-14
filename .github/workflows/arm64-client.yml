@@ -5,16 +5,22 @@ on:
   pull_request:
     paths:
       - .github/workflows/arm64-client.yml
+      - README.md
+      - eng/openssh-portable-v10.0.0.0-portable-config.patch
       - eng/openssh-portable-v10.0.0.0-vcpkg.patch
       - scripts/New-OpenSSHClientPackage.ps1
+      - tests/Invoke-OpenSSHConfigTests.ps1
       - tests/Invoke-OpenSSHClientSmoke.ps1
       - tests/Invoke-OpenSSHUnitTests.ps1
       - tests/Test-OpenSSHClientPackage.ps1
   push:
     paths:
       - .github/workflows/arm64-client.yml
+      - README.md
+      - eng/openssh-portable-v10.0.0.0-portable-config.patch
       - eng/openssh-portable-v10.0.0.0-vcpkg.patch
       - scripts/New-OpenSSHClientPackage.ps1
+      - tests/Invoke-OpenSSHConfigTests.ps1
       - tests/Invoke-OpenSSHClientSmoke.ps1
       - tests/Invoke-OpenSSHUnitTests.ps1
       - tests/Test-OpenSSHClientPackage.ps1
@@ -25,6 +31,7 @@ permissions:
 env:
   OPENSSH_SOURCE_REVISION: b8c08ef9da9450a94a9c5ef717d96a7bd83f3332
   OPENSSH_SOURCE_REF: v10.0.0.0
+  PORTABLE_GLOBAL_CONFIG: ../../etc/ssh/ssh_config
   VCPKG_BASELINE: 16fa044f80dd984c24deff5b7d0457e64c85a1e0
 
 jobs:
@@ -67,12 +74,20 @@ jobs:
           }
           Write-Host "Using Visual Studio at $visualStudio"
 
-      - name: Apply reproducible dependency lock
+      - name: Apply reproducible source patches
         shell: pwsh
         run: |
           git -C openssh-portable apply "$env:GITHUB_WORKSPACE\release-repo\eng\openssh-portable-v10.0.0.0-vcpkg.patch"
           if ($LASTEXITCODE -ne 0) {
             throw 'The dependency servicing patch no longer applies to the pinned OpenSSH source.'
+          }
+          git -C openssh-portable apply --ignore-space-change "$env:GITHUB_WORKSPACE\release-repo\eng\openssh-portable-v10.0.0.0-portable-config.patch"
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The portable client configuration patch no longer applies to the pinned OpenSSH source.'
+          }
+          git -C openssh-portable diff --check
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The patched OpenSSH source contains whitespace errors.'
           }
 
       - name: Bootstrap vcpkg
@@ -95,6 +110,7 @@ jobs:
             -destination "$env:GITHUB_WORKSPACE\source-packages" `
             -NativeHostArch arm64 `
             -Configuration Release `
+            -PortableGlobalConfig "$env:PORTABLE_GLOBAL_CONFIG" `
             -Verbose
           if ($LASTEXITCODE -ne 0) {
             throw "OpenSSH ARM64 build failed with exit code $LASTEXITCODE."
@@ -112,6 +128,14 @@ jobs:
           & "$env:GITHUB_WORKSPACE\release-repo\tests\Invoke-OpenSSHClientSmoke.ps1" `
             -BuildDirectory "$env:GITHUB_WORKSPACE\openssh-portable\bin\arm64\Release"
 
+      - name: Verify portable global configuration
+        shell: powershell
+        run: |
+          & "$env:GITHUB_WORKSPACE\release-repo\tests\Invoke-OpenSSHConfigTests.ps1" `
+            -BuildDirectory "$env:GITHUB_WORKSPACE\openssh-portable\bin\arm64\Release" `
+            -GlobalConfigMode Portable `
+            -PortableGlobalConfig "$env:PORTABLE_GLOBAL_CONFIG"
+
       - name: Create Git for Windows client payload
         shell: powershell
         run: |
@@ -123,7 +147,8 @@ jobs:
             -VcpkgBaseline "$env:VCPKG_BASELINE" `
             -BuildRepository "$env:GITHUB_REPOSITORY" `
             -BuildRevision "$env:GITHUB_SHA" `
-            -BuildRun "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+            -BuildRun "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID" `
+            -PortableGlobalConfig "$env:PORTABLE_GLOBAL_CONFIG"
 
       - name: Verify client-only artifact
         shell: powershell
@@ -148,6 +173,103 @@ jobs:
           path: |
             openssh-portable/contrib/win32/openssh/OpenSSHReleasearm64.log
             openssh-portable/contrib/win32/openssh/vcpkg_installed/arm64-custom/vcpkg/issue_body.md
+            smoke-logs/sshd.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  preserve-x64-default:
+    name: Preserve default x64 ProgramData behavior
+    runs-on: windows-2022
+    timeout-minutes: 120
+
+    steps:
+      - name: Check out release automation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          path: release-repo
+
+      - name: Check out exact OpenSSH source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: PowerShell/openssh-portable
+          ref: ${{ env.OPENSSH_SOURCE_REVISION }}
+          path: openssh-portable
+
+      - name: Check out dependency registry
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          repository: microsoft/vcpkg
+          ref: ${{ env.VCPKG_BASELINE }}
+          path: vcpkg
+
+      - name: Apply reproducible source patches
+        shell: pwsh
+        run: |
+          git -C openssh-portable apply "$env:GITHUB_WORKSPACE\release-repo\eng\openssh-portable-v10.0.0.0-vcpkg.patch"
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The dependency servicing patch no longer applies to the pinned OpenSSH source.'
+          }
+          git -C openssh-portable apply --ignore-space-change "$env:GITHUB_WORKSPACE\release-repo\eng\openssh-portable-v10.0.0.0-portable-config.patch"
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The portable client configuration patch no longer applies to the pinned OpenSSH source.'
+          }
+          git -C openssh-portable diff --check
+          if ($LASTEXITCODE -ne 0) {
+            throw 'The patched OpenSSH source contains whitespace errors.'
+          }
+
+      - name: Bootstrap vcpkg
+        shell: pwsh
+        run: |
+          & "$env:GITHUB_WORKSPACE\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
+          if ($LASTEXITCODE -ne 0) {
+            throw "vcpkg bootstrap failed with exit code $LASTEXITCODE."
+          }
+          & "$env:GITHUB_WORKSPACE\vcpkg\vcpkg.exe" integrate install
+          if ($LASTEXITCODE -ne 0) {
+            throw "vcpkg MSBuild integration failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Build default OpenSSH x64
+        shell: powershell
+        run: |
+          & "$env:GITHUB_WORKSPACE\openssh-portable\contrib\win32\openssh\OpenSSH-build.ps1" `
+            -repolocation "$env:GITHUB_WORKSPACE\openssh-portable" `
+            -destination "$env:GITHUB_WORKSPACE\source-packages-x64" `
+            -NativeHostArch x64 `
+            -Configuration Release `
+            -Verbose
+          if ($LASTEXITCODE -ne 0) {
+            throw "OpenSSH x64 build failed with exit code $LASTEXITCODE."
+          }
+
+      - name: Run upstream x64 unit tests
+        shell: powershell
+        run: |
+          & "$env:GITHUB_WORKSPACE\release-repo\tests\Invoke-OpenSSHUnitTests.ps1" `
+            -BuildDirectory "$env:GITHUB_WORKSPACE\openssh-portable\bin\x64\Release"
+
+      - name: Verify default ProgramData configuration
+        shell: powershell
+        run: |
+          & "$env:GITHUB_WORKSPACE\release-repo\tests\Invoke-OpenSSHConfigTests.ps1" `
+            -BuildDirectory "$env:GITHUB_WORKSPACE\openssh-portable\bin\x64\Release" `
+            -GlobalConfigMode ProgramData
+
+      - name: Exercise default x64 client behavior
+        shell: powershell
+        run: |
+          & "$env:GITHUB_WORKSPACE\release-repo\tests\Invoke-OpenSSHClientSmoke.ps1" `
+            -BuildDirectory "$env:GITHUB_WORKSPACE\openssh-portable\bin\x64\Release"
+
+      - name: Upload x64 build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: OpenSSH-x64-build-logs
+          path: |
+            openssh-portable/contrib/win32/openssh/OpenSSHReleasex64.log
+            openssh-portable/contrib/win32/openssh/vcpkg_installed/x64-custom/vcpkg/issue_body.md
             smoke-logs/sshd.log
           if-no-files-found: ignore
           retention-days: 7
