@@ -19,7 +19,12 @@ param(
 
     [string] $BuildRepository = '',
     [string] $BuildRevision = '',
-    [string] $BuildRun = ''
+    [string] $BuildRun = '',
+
+    [ValidateScript({
+        $_ -match '^[A-Za-z0-9_.][A-Za-z0-9_./-]*$' -and -not [IO.Path]::IsPathRooted($_)
+    })]
+    [string] $PortableGlobalConfig = '../../etc/ssh/ssh_config'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -58,6 +63,21 @@ $serverOnlyNames = @(
     'openssh-events.man',
     'moduli'
 )
+
+$destinationRoot = [System.IO.Path]::GetFullPath($DestinationDirectory)
+$destinationRoot = $destinationRoot.TrimEnd([System.IO.Path]::DirectorySeparatorChar) +
+    [System.IO.Path]::DirectorySeparatorChar
+$packagedSsh = Join-Path $destinationRoot 'usr\bin\ssh.exe'
+$portableConfigPath = [System.IO.Path]::GetFullPath(
+    (Join-Path (Split-Path $packagedSsh -Parent) $PortableGlobalConfig.Replace('/', '\'))
+)
+if (-not $portableConfigPath.StartsWith(
+    $destinationRoot,
+    [System.StringComparison]::OrdinalIgnoreCase
+)) {
+    throw "Portable global config '$PortableGlobalConfig' resolves outside the package tree."
+}
+$portableConfigPackagePath = $portableConfigPath.Substring($destinationRoot.Length).Replace('\', '/')
 
 function Get-PEMachine {
     param(
@@ -174,6 +194,14 @@ $manifest = [ordered]@{
         repository = $BuildRepository
         revision = $BuildRevision
         run = $BuildRun
+    }
+    globalConfig = [ordered]@{
+        mode = 'executable-relative'
+        executable = 'usr/bin/ssh.exe'
+        relativePath = $PortableGlobalConfig
+        packagePath = $portableConfigPackagePath
+        configurationIncluded = $false
+        unknownAlgorithmBehavior = 'error'
     }
     files = $manifestFiles
     baselineDisposition = $baselineDisposition

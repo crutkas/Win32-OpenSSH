@@ -18,6 +18,60 @@ Git for Windows OpenSSH paths. Ten paths receive native replacements.
 and does not support host-based authentication. Server daemons, service scripts,
 server configuration, and shell-host files are excluded from the artifact.
 
+#### Portable client global configuration
+
+The Windows `ssh` project has an opt-in build property for a package-relative
+global client configuration:
+
+```powershell
+OpenSSH-build.ps1 -PortableGlobalConfig ../../etc/ssh/ssh_config
+```
+
+Without this property, all architectures retain the standard
+`%ProgramData%\ssh\ssh_config` behavior. With it, `ssh.exe` resolves the
+configured relative path from its own executable directory, canonicalizes it,
+and applies the existing Windows secure-file ACL validation. The ARM64 client
+artifact uses `../../etc/ssh/ssh_config`, which maps
+`usr/bin/ssh.exe` to `etc/ssh/ssh_config` in a relocated Git installation. The
+manifest records this contract but deliberately does not include the
+configuration file; the downstream Git package owns that policy file.
+
+This is client-only and build-time-only. It adds no runtime environment
+variable, registry setting, current-directory search, or server/`sshd` path.
+User `~/.ssh/config` remains higher precedence, `-F` still replaces both normal
+config files, and Include, tilde expansion, Windows profile paths, missing-file
+handling, and malformed-file failures continue through the normal OpenSSH
+parser. A writable package tree introduces no new trust boundary because its
+owner can already replace `ssh.exe`; when elevated or installed for multiple
+users, the existing ACL check rejects a global config writable by an
+untrusted identity.
+
+Git for Windows' current global config contains unsupported
+`ssh-dss`/`ssh-dss-cert-v01@openssh.com` additions. The native client remains
+strict and rejects these names; it does not conditionally or silently ignore
+unknown algorithms. The downstream package must remove only those unsupported
+tokens from the affected comma-separated algorithm-list directives, preserving
+the list modifier and every supported token. A directive whose resulting list
+is empty must be removed rather than replaced with a broader policy.
+
+To make the native client the default downstream:
+
+1. Build and consume this artifact, keep the existing ten replacements and
+   `ssh-keysign.exe` removal, and install the transformed policy as
+   `etc/ssh/ssh_config`.
+2. Verify the installed `usr/bin/ssh.exe` and `etc/ssh/ssh_config` retain the
+   relative layout and secure Windows ACLs; no wrapper or environment override
+   is required.
+3. Remove the integration opt-in only after the transformed config passes the
+   package's x64/native compatibility tests. The x64 package itself need not
+   adopt the build property.
+
+The workflow tests the portable ARM64 build from a relocated Unicode/space path
+and a default x64 build against ProgramData. It covers user and `-F`
+precedence, Include, missing and malformed files, strict legacy-algorithm
+rejection, insecure ACLs, and hostile current-directory/environment inputs,
+then runs the existing unit, client, PTY, and Git-over-SSH matrix.
+
 ### Release History
 
 | Date | Version | Release with source |
