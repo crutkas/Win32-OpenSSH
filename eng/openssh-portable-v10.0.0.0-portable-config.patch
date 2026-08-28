@@ -1,0 +1,164 @@
+diff --git a/contrib/win32/openssh/OpenSSH-build.ps1 b/contrib/win32/openssh/OpenSSH-build.ps1
+index 22c6794a84deccefb39fb18ce042743556f6c9ad..7120fc589b294f6cc7849d9b3a62041db5a00ba4 100644
+--- a/contrib/win32/openssh/OpenSSH-build.ps1
++++ b/contrib/win32/openssh/OpenSSH-build.ps1
+@@ -1,4 +1,4 @@
+-[cmdletbinding()]
++[CmdletBinding(PositionalBinding = $false)]
+ # PowerShell Script to clone, build and package PowerShell from specified fork and branch
+ param (    
+     [string] $repolocation = "$PSScriptRoot\..\..\..",
+@@ -7,6 +7,7 @@ param (
+     [String]$NativeHostArch = 'x64',        
+     [ValidateSet('Debug', 'Release')]
+     [string]$Configuration = "Release",        
++    [switch]$UsePortableGlobalConfig,
+     [switch]$NoOpenSSL,
+     [switch]$OneCore
+ )
+@@ -25,8 +26,9 @@ try
+         $Bucket = "OpenSSH-Win64"
+         $UnitTestFolder = "Unittests-Win64"
+     }
+-    Write-Verbose "Start-OpenSSHBuild -NativeHostArch $NativeHostArch -Configuration $Configuration -NoOpenSSL:$NoOpenSSL -Onecore:$OneCore -Verbose " -Verbose
+-    Start-OpenSSHBuild -NativeHostArch $NativeHostArch -Configuration $Configuration -NoOpenSSL:$NoOpenSSL -Onecore:$OneCore -Verbose
++    $portableGlobalConfig = $UsePortableGlobalConfig.IsPresent
++    Write-Verbose "Start-OpenSSHBuild -NativeHostArch $NativeHostArch -Configuration $Configuration -UsePortableGlobalConfig:$portableGlobalConfig -NoOpenSSL:$NoOpenSSL -Onecore:$OneCore -Verbose " -Verbose
++    Start-OpenSSHBuild -NativeHostArch $NativeHostArch -Configuration $Configuration -UsePortableGlobalConfig:$portableGlobalConfig -NoOpenSSL:$NoOpenSSL -Onecore:$OneCore -Verbose
+     Write-Verbose "Start-OpenSSHPackage -NativeHostArch $NativeHostArch -Configuration $Configuration -NoOpenSSL:$NoOpenSSL -Onecore:$OneCore -DestinationPath $repolocation\$($Bucket)_symbols" -verbose
+     Start-OpenSSHPackage -NativeHostArch $NativeHostArch -Configuration $Configuration -NoOpenSSL:$NoOpenSSL -Onecore:$OneCore -DestinationPath "$repolocation\$($Bucket)_symbols"
+     Copy-OpenSSHUnitTests -NativeHostArch $NativeHostArch -Configuration $Configuration -DestinationPath "$repolocation\UnitTests"
+diff --git a/contrib/win32/openssh/OpenSSHBuildHelper.psm1 b/contrib/win32/openssh/OpenSSHBuildHelper.psm1
+index 61a7c4502e135ef56e4de68c1280b3dfc83ead52..9e43582a282c8206572d62f04b4377d9ddfb62f6 100644
+--- a/contrib/win32/openssh/OpenSSHBuildHelper.psm1
++++ b/contrib/win32/openssh/OpenSSHBuildHelper.psm1
+@@ -469,7 +469,7 @@ function Copy-OpenSSHUnitTests
+ 
+ function Start-OpenSSHBuild
+ {
+-    [CmdletBinding(SupportsShouldProcess=$false)]
++    [CmdletBinding(SupportsShouldProcess=$false, PositionalBinding=$false)]
+     param
+     (
+         [ValidateSet('x86', 'x64', 'arm64', 'arm')]
+@@ -478,6 +478,8 @@ function Start-OpenSSHBuild
+         [ValidateSet('Debug', 'Release')]
+         [string]$Configuration = "Release",
+ 
++        [switch]$UsePortableGlobalConfig,
++
+         [switch]$NoOpenSSL,
+ 
+         [switch]$OneCore
+@@ -550,7 +552,8 @@ function Start-OpenSSHBuild
+     }
+ 
+     $solutionFile = Get-SolutionFile -root $repositoryRoot.FullName
+-    $cmdMsg = @("${solutionFile}", "/t:Rebuild", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/m", "/nologo", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")
++    $portableGlobalConfig = $UsePortableGlobalConfig.IsPresent.ToString().ToLowerInvariant()
++    $cmdMsg = @("${solutionFile}", "/t:Rebuild", "/p:Platform=${NativeHostArch}", "/p:Configuration=${Configuration}", "/p:UsePortableGlobalConfig=${portableGlobalConfig}", "/m", "/nologo", "/fl", "/flp:LogFile=${script:BuildLogFile}`;Append`;Verbosity=diagnostic")
+     if($silent)
+     {
+         $cmdMsg += "/noconlog"
+diff --git a/contrib/win32/openssh/ssh.vcxproj b/contrib/win32/openssh/ssh.vcxproj
+index 82c9c12d3600d7f435241b6c1e6214bcf072bd6f..77b0b3069ab2e4af8295c4b983e861598e81fc7b 100644
+--- a/contrib/win32/openssh/ssh.vcxproj
++++ b/contrib/win32/openssh/ssh.vcxproj
+@@ -133,6 +133,9 @@
+     <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+   </ImportGroup>
+   <PropertyGroup Label="UserMacros" />
++  <PropertyGroup Label="PortableConfiguration">
++    <UsePortableGlobalConfig>false</UsePortableGlobalConfig>
++  </PropertyGroup>
+   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+     <LinkIncremental>false</LinkIncremental>
+     <IntDir>$(Platform)\$(Configuration)\$(TargetName)\</IntDir>
+@@ -224,6 +227,11 @@
+       <AdditionalManifestFiles>targetos.manifest</AdditionalManifestFiles>
+     </Manifest>
+   </ItemDefinitionGroup>
++  <ItemDefinitionGroup Condition="$([System.String]::CompareOrdinal('$(UsePortableGlobalConfig)', 'true')) == 0">
++    <ClCompile>
++      <PreprocessorDefinitions>SSH_PORTABLE_GLOBAL_CONFIG=1;%(PreprocessorDefinitions)</PreprocessorDefinitions>
++    </ClCompile>
++  </ItemDefinitionGroup>
+   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+     <ClCompile>
+       <PrecompiledHeader>NotUsing</PrecompiledHeader>
+@@ -529,6 +537,10 @@
+   <ItemGroup>
+     <ResourceCompile Include="version.rc" />
+   </ItemGroup>
++  <Target Name="ValidateUsePortableGlobalConfig" BeforeTargets="PrepareForBuild"
++    Condition="$([System.String]::CompareOrdinal('$(UsePortableGlobalConfig)', 'true')) != 0 and $([System.String]::CompareOrdinal('$(UsePortableGlobalConfig)', 'false')) != 0">
++    <Error Text="UsePortableGlobalConfig must be exactly 'true' or 'false'." />
++  </Target>
+   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+   <ImportGroup Label="ExtensionTargets">
+   </ImportGroup>
+diff --git a/ssh.c b/ssh.c
+index ea94d25106cf600e6ec1c39974ecc9047471244b..eabf82d78529e20f0f249a2739888f6031fc684d 100644
+--- a/ssh.c
++++ b/ssh.c
+@@ -112,6 +112,10 @@
+ #include "myproposal.h"
+ #include "utf8.h"
+ 
++#ifdef WINDOWS
++#include "misc_internal.h"
++#endif
++
+ #ifdef ENABLE_PKCS11
+ #include "ssh-pkcs11.h"
+ #endif
+@@ -556,6 +560,40 @@ check_load(int r, struct sshkey **k, const char *path, const char *message)
+ 	}
+ }
+ 
++#ifdef WINDOWS
++#define PORTABLE_EXECUTABLE_DIRECTORY_SUFFIX	"/usr/bin"
++#define PORTABLE_SYSTEM_CONFIG_SUFFIX		"/etc/ssh/ssh_config"
++
++static const char *
++systemwide_config_file(void)
++{
++#ifdef SSH_PORTABLE_GLOBAL_CONFIG
++	static char config_path[PATH_MAX];
++	char executable_dir[PATH_MAX];
++	size_t executable_dir_len, suffix_len;
++	int r;
++
++	if (realpath(__progdir, executable_dir) == NULL)
++		fatal("Cannot resolve portable executable directory \"%s\": %s",
++		    __progdir, strerror(errno));
++	executable_dir_len = strlen(executable_dir);
++	suffix_len = sizeof(PORTABLE_EXECUTABLE_DIRECTORY_SUFFIX) - 1;
++	if (executable_dir_len <= suffix_len ||
++	    strcasecmp(executable_dir + executable_dir_len - suffix_len,
++	    PORTABLE_EXECUTABLE_DIRECTORY_SUFFIX) != 0)
++		fatal("Portable ssh.exe must run from a usr/bin directory");
++	executable_dir[executable_dir_len - suffix_len] = '\0';
++	r = snprintf(config_path, sizeof(config_path), "%s%s", executable_dir,
++	    PORTABLE_SYSTEM_CONFIG_SUFFIX);
++	if (r < 0 || (size_t)r >= sizeof(config_path))
++		fatal("Portable global config path is too long");
++	return config_path;
++#else
++	return _PATH_HOST_CONFIG_FILE;
++#endif
++}
++#endif
++
+ /*
+  * Read per-user configuration file.  Ignore the system wide config
+  * file if the user specifies a config file on the command line.
+@@ -592,7 +630,7 @@ process_config_files(const char *host_name, struct passwd *pw,
+ 		 *	If a non-admin user creates the systemwide folder then systemwide ssh_config inherits parent folder permissions i.e., non-admin user have write permissions.
+ 		 *	This is not desirable. For windows, We make sure the systemwide sshd_config file is not editable by non-admin users.
+ 		 */
+-		(void)read_config_file(_PATH_HOST_CONFIG_FILE, pw,
++		(void)read_config_file(systemwide_config_file(), pw,
+ 			host, host_name, cmd, &options, SSHCONF_CHECKPERM |
+ 			(final_pass ? SSHCONF_FINAL : 0), want_final_pass);
+ #else

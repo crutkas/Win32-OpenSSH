@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 2,
+  "source": {
+    "repository": "PowerShell/openssh-portable",
+    "revision": "b8c08ef9da9450a94a9c5ef717d96a7bd83f3332",
+    "tree": "34944561ca69ce2d2356ea04b14a1d150f9c668a",
+    "tag": "v10.0.0.0"
+  },
+  "change": {
+    "patch": "eng/openssh-portable-v10.0.0.0-portable-config.patch",
+    "sha256": "436a44f5a21594f5207b678d728792bc8d1589d2bfdfedaa3bb162dc479c3ac3",
+    "scope": "ssh-client-only",
+    "optInProperty": "UsePortableGlobalConfig",
+    "allowedValues": [
+      "false",
+      "true"
+    ],
+    "expectedExecutableDirectory": "usr/bin",
+    "bundleRelativeConfig": "etc/ssh/ssh_config",
+    "files": {
+      "ssh.c": {
+        "preimage": {
+          "gitBlob": "ea94d25106cf600e6ec1c39974ecc9047471244b",
+          "sha256": "61e7507efc8f46f8315aa03d86a750d594bb27fb80636a913e7bb2bbefdd4dcb"
+        },
+        "postimage": {
+          "gitBlob": "eabf82d78529e20f0f249a2739888f6031fc684d",
+          "sha256": "ef4869444d3ea3b981a149a2fa13590b61a555d8739755345da44608b5892b0b"
+        }
+      },
+      "contrib/win32/openssh/OpenSSH-build.ps1": {
+        "preimage": {
+          "gitBlob": "22c6794a84deccefb39fb18ce042743556f6c9ad",
+          "sha256": "96864a436fc1de2e4dbbeb4d2798355b0799f11e3e7b8daec28d711c60b23468"
+        },
+        "postimage": {
+          "gitBlob": "7120fc589b294f6cc7849d9b3a62041db5a00ba4",
+          "sha256": "79e8fef9ece5190f492867f0ef85872f95810dd3392e7434aab09bfb0658a068"
+        }
+      },
+      "contrib/win32/openssh/OpenSSHBuildHelper.psm1": {
+        "preimage": {
+          "gitBlob": "61a7c4502e135ef56e4de68c1280b3dfc83ead52",
+          "sha256": "a78c2afb5e3b2cfc71b39d036794c57be8acd8f9b8ffaf3a3cdaad6016909779"
+        },
+        "postimage": {
+          "gitBlob": "9e43582a282c8206572d62f04b4377d9ddfb62f6",
+          "sha256": "a903d049339f95ff1ca6652afc896657780da891fde84386bbfd45551a91dc06"
+        }
+      },
+      "contrib/win32/openssh/ssh.vcxproj": {
+        "preimage": {
+          "gitBlob": "82c9c12d3600d7f435241b6c1e6214bcf072bd6f",
+          "sha256": "f64bb31dbff49db2581c3bc701149456f03d7e42ae6b7658302694ecb284b339"
+        },
+        "postimage": {
+          "gitBlob": "77b0b3069ab2e4af8295c4b983e861598e81fc7b",
+          "sha256": "ae5d7b0ec6456307a64f1dc961bcd00a8618a7b0b3e72256eda7aa75965f948f"
+        }
+      }
+    }
+  },
+  "outputs": {
+    "workflowIncluded": false,
+    "artifactsProduced": false
+  }
+}
