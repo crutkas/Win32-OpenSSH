@@ -7,15 +7,29 @@ which has instructions for [building](https://github.com/PowerShell/Win32-OpenSS
 ## Source-only portable client configuration proposal
 
 This draft records an architecture-neutral source patch needed by a future
-native ARM64 Git for Windows client: an opt-in build property that lets
-`ssh.exe` resolve its system configuration relative to its executable. The
-intended layout maps `usr/bin/ssh.exe` to `etc/ssh/ssh_config` through
-`../../etc/ssh/ssh_config`.
+native ARM64 Git for Windows client. The `-UsePortableGlobalConfig` switch is
+the only opt-in. It always passes the MSBuild property as exact lowercase
+`false` by default or `true` when present; direct builds reject every other
+value, including alternate casing.
+
+Portable mode accepts no caller-supplied path. It requires `ssh.exe` to run
+from the fixed `usr/bin` bundle location and selects only the hardcoded
+bundle-relative `etc/ssh/ssh_config` file. No traversal component is accepted
+from a caller.
 
 The default remains `%ProgramData%\ssh\ssh_config` when the property is absent.
 The override is compile-time-only, applies only to `ssh.exe`, canonicalizes
 from the executable directory, and retains the existing Windows secure-file
-permission check.
+permission check. A writable, reparseable, or otherwise untrusted bundle root
+is unsafe: the configuration file ACL check does not establish bundle
+provenance or authenticate ancestor directories and reparse targets. `scp` and
+`sftp` can inherit this behavior when they launch `ssh.exe`, so the entire
+portable directory must come from an admitted, access-controlled source.
+
+Only explicit portable mode makes an invalid executable layout, directory
+resolution failure, or path truncation fatal. The default ProgramData path
+does not enter the portable resolver, and an absent configuration file retains
+the normal non-fatal OpenSSH behavior.
 
 This repository intentionally includes no workflow, dependency bootstrap,
 package producer, or binary artifact for the proposal. Runtime, SDK, compiler,
@@ -23,12 +37,22 @@ linker, dependency-package, native process, loaded-module, and ABI provenance
 remain external admission gates. The source record must not be interpreted as
 an ARM64 build or behavior claim.
 
-The immutable source identity and patch digest are recorded in
+The immutable source identity, all four preimage and postimage blob IDs and
+SHA-256 values, and the patch digest are recorded in
 `eng/portable-ssh-config-source-lock.json`. The offline policy check requires
-only the current repository and Git:
+only the current repository and Git, but does not claim that the patch applies:
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-PortableConfigSourceCandidate.ps1
+```
+
+Exact application is proven separately against a clean checkout of the locked
+source. This check verifies every preimage, performs real `git apply --check`
+and apply operations, validates every postimage and source contract, then
+reverse-applies and proves that the source tree is clean again:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-PortableConfigSourceCandidate.ps1 -SourceRoot <exact-source-root>
 ```
 
 Native validation stays blocked until an independently admitted bootstrap can
