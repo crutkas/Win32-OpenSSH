@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "repository": "PowerShell/openssh-portable",
+    "revision": "b8c08ef9da9450a94a9c5ef717d96a7bd83f3332",
+    "tree": "34944561ca69ce2d2356ea04b14a1d150f9c668a",
+    "tag": "v10.0.0.0",
+    "files": {
+      "ssh.c": "ea94d25106cf600e6ec1c39974ecc9047471244b",
+      "contrib/win32/openssh/OpenSSH-build.ps1": "22c6794a84deccefb39fb18ce042743556f6c9ad",
+      "contrib/win32/openssh/OpenSSHBuildHelper.psm1": "61a7c4502e135ef56e4de68c1280b3dfc83ead52",
+      "contrib/win32/openssh/ssh.vcxproj": "82c9c12d3600d7f435241b6c1e6214bcf072bd6f"
+    }
+  },
+  "change": {
+    "patch": "eng/openssh-portable-v10.0.0.0-portable-config.patch",
+    "sha256": "45ff3f2ca37e8a06fdcf6c73855042e5829aafb42ab1ea2b696459b2cec66739",
+    "scope": "ssh-client-only",
+    "portableGlobalConfig": "../../etc/ssh/ssh_config"
+  },
+  "outputs": {
+    "workflowIncluded": false,
+    "artifactsProduced": false
+  }
+}

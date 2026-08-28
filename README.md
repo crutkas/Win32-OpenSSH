@@ -4,6 +4,39 @@ This repo (https://github.com/PowerShell/Win32-OpenSSH) is being maintained to k
 and because it contains the [wiki](https://github.com/PowerShell/Win32-OpenSSH/wiki)
 which has instructions for [building](https://github.com/PowerShell/Win32-OpenSSH/wiki/Building-OpenSSH-for-Windows-(using-LibreSSL-crypto)).
 
+## Source-only portable client configuration proposal
+
+This draft records an architecture-neutral source patch needed by a future
+native ARM64 Git for Windows client: an opt-in build property that lets
+`ssh.exe` resolve its system configuration relative to its executable. The
+intended layout maps `usr/bin/ssh.exe` to `etc/ssh/ssh_config` through
+`../../etc/ssh/ssh_config`.
+
+The default remains `%ProgramData%\ssh\ssh_config` when the property is absent.
+The override is compile-time-only, applies only to `ssh.exe`, canonicalizes
+from the executable directory, and retains the existing Windows secure-file
+permission check.
+
+This repository intentionally includes no workflow, dependency bootstrap,
+package producer, or binary artifact for the proposal. Runtime, SDK, compiler,
+linker, dependency-package, native process, loaded-module, and ABI provenance
+remain external admission gates. The source record must not be interpreted as
+an ARM64 build or behavior claim.
+
+The immutable source identity and patch digest are recorded in
+`eng/portable-ssh-config-source-lock.json`. The offline policy check requires
+only the current repository and Git:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\tests\Test-PortableConfigSourceCandidate.ps1
+```
+
+Native validation stays blocked until an independently admitted bootstrap can
+build the pinned source on genuine Windows ARM64. That later gate must cover
+default x64 behavior, executable-relative ARM64 configuration, OS and process
+architecture, imported and loaded modules, and dependency ABI provenance
+before any package or artifact is produced.
+
 ### Release History
 
 | Date | Version | Release with source |
